@@ -1,0 +1,29 @@
+[project]
+name = "tldl"
+version = "0.1.0"
+description = "Turn a URL or audio file into a condensed transcript"
+readme = "README.md"
+authors = [
+    { name = "j4n", email = "j4n@systemli.org" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "faster-whisper>=1.2.1",
+]
+
+[project.scripts]
+tldl = "tldl.cli:main"
+
+[tool.uv]
+# onnxruntime 1.24 ships no cp310 wheels
+constraint-dependencies = ["onnxruntime<1.24; python_version < '3.11'"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.10",
+]
