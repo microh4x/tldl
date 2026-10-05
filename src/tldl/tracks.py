@@ -46,8 +46,13 @@ def select_track(
     if allow_translated:
         candidates += pick(auto, translated, "auto-translated")
     if not candidates:
-        raise NoTrack(
+        summary = (
             f"no {lang} track; manual: {', '.join(manual) or 'none'}; "
             f"orig: {', '.join(orig) or 'none'}; {len(translated)} translated"
         )
+        if not allow_translated and pick(auto, translated, "auto-translated"):
+            summary += (
+                f"; rerun with --allow-translated for a machine-translated {lang} track"
+            )
+        raise NoTrack(summary)
     return candidates[0], candidates[1:]

@@ -26,6 +26,7 @@ def test_translated_track_needs_allow_translated():
     with pytest.raises(NoTrack) as e:
         select_track(info, "de")
     assert "3 translated" in str(e.value)
+    assert "--allow-translated" in str(e.value)
     assert select_track(info, "de", allow_translated=True)[0] == Track(
         "auto-translated", "de-DE"
     )
