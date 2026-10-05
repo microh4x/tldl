@@ -157,7 +157,7 @@ Accepted behaviour: a genuine immediate repeat of a line is indistinguishable fr
 - `meta.json`: `tool{name,version}`, `created` (ISO 8601), `url`, `id`, `title`, `duration_s`, `source` (`captions|whisper`), `auto_fallback` (null or `{from, reason}`), `captions{track, kind, info_language, available{manual[], auto_orig[], auto_translated_count}}`, `whisper{model, language, language_probability}`, `yt_dlp_version`, `timings_s{...}`.
 - `raw.vtt`: the downloaded caption file byte for byte (captions only).
 
-`key` = first 16 hex of the SHA-256 of canonical JSON of `{canonical_url, source_used, resolved_sub_lang, allow_translated, lang, model}`, where fields irrelevant to the source used are null. For a local file, `canonical_url` is `file:sha256:<first 16 hex of the file's SHA-256>`, so a moved or renamed file still hits the cache. Lookup tries the captions key first (for `auto`/`subs` on YouTube), then the whisper key. `--interval` and `--no-header` are not in the key because cleanup and rendering run at output time. Canonical URL: for YouTube, `https://www.youtube.com/watch?v=<id>`; otherwise lower-case scheme and host, drop the fragment. A cache hit logs the directory path. No eviction in v1.
+`key` = first 16 hex of the SHA-256 of canonical JSON of `{canonical_url, source_used, sub_lang, allow_translated, lang, model}`, where fields irrelevant to the source used are null. `sub_lang` is the value as given (`auto` stays `auto`), so a lookup needs no metadata call; `auto` and an explicit `en` make two entries for the same track. For a local file, `canonical_url` is `file:sha256:<first 16 hex of the file's SHA-256>`, so a moved or renamed file still hits the cache. Lookup tries the captions key first (for `auto`/`subs` on YouTube), then the whisper key. `--interval` and `--no-header` are not in the key because cleanup and rendering run at output time. Canonical URL: for YouTube, `https://www.youtube.com/watch?v=<id>`; otherwise lower-case scheme and host, drop the fragment. A cache hit logs the directory path. No eviction in v1.
 
 ## 7. Project layout and tooling
 
@@ -191,31 +191,33 @@ Only these names are fixed in advance; helpers come out of TDD. Each type lives 
 |---|---|
 | `vtt.py` | `Cue(start: float, end: float, lines: list[str])`; `parse(text: str) -> list[Cue]` |
 | `tracks.py` | `Track(kind: str, key: str)`; `NoTrack(summary)`; `primary(key) -> str`; `select_track(info, lang, allow_translated=False) -> (Track, others)` |
-| `ytdlp.py` | `info(url) -> dict`; `captions(info_path, track, tmpdir) -> Path`; `audio(url, tmpdir) -> (Path, dict)`; the command comes from `TLDL_YTDLP` |
-| `transcribe.py` | `run(path, model, lang, allow_download) -> (list[Cue], lang, prob)`; `Stopped(cues, at)`, raised on Ctrl-C with the partial cues |
+| `ytdlp.py` | `info(cmd, url) -> dict`; `captions(cmd, info_path, track, tmpdir) -> Path`; `audio(cmd, url, tmpdir) -> (Path, dict)`; `Failed(msg)`. `cmd` is the split command; the `--ytdlp-cmd` default reads `TLDL_YTDLP` |
+| `transcribe.py` | `run(path, model, lang, allow_download) -> (list[Cue], lang, prob)`; `Stopped(cues, at)`, raised on Ctrl-C with the partial cues; `NoModel(repo)` |
 | `clean.py` | `captions(cues) -> list[Cue]`; `whisper(cues) -> list[Cue]`; both log what they removed |
 | `render.py` | `header(meta) -> str`; `render(cues, interval, header=None) -> str` |
 | `cache.py` | `key(**fields) -> str`; `load(key) -> (cues, meta) or None`; `store(key, cues, meta, raw_vtt=None)` |
-| `cli.py` | `main(argv=None, transcribe=transcribe.run) -> int`; `run(source, opts, transcribe) -> (cues, meta)` |
+| `cli.py` | `main(argv=None, transcribe=transcribe.run) -> int`; `run(source, opts, transcribe) -> (cues, meta)`. `opts` is the argparse `Namespace`; `run` returns raw cues and `main` cleans and renders them |
 
-`meta` is a plain dict shaped like `meta.json` (section 6.5). `cli.main` catches `Stopped`, renders its cues plus the stop line, and exits 130.
+`meta` is a plain dict shaped like `meta.json` (section 6.5). `cli.main` catches `Stopped`, renders its cues plus the stop line, and exits 130. It catches `NoTrack`, `ytdlp.Failed`, `transcribe.NoModel` and `OSError`, logs one line and exits 1; anything else keeps its traceback.
 
 ## 8. Testing
 
-Offline only; no network in pytest. Vertical slices, most useful first; each test must fail on a real bug, so no test exists only to raise coverage. About 12 tests in all.
+Offline by default; the one network test is opt-in. Vertical slices, most useful first; each test must fail on a real bug, so no test exists only to raise coverage. About 13 tests in all: 12 offline plus one opt-in network test.
 
 | # | Slice | Tests |
 |---|---|---|
 | 1 | Fixture VTT -> parse -> clean -> render (`test_pipeline.py`) | Output holds each of the 661 lines once, in order, in `[MM:SS]` blocks, with `>>` decoded and one trailing newline |
 | 2 | Track choice (`test_tracks.py`) | `auto` picks `en-orig`; `de` picks `de-DE-orig`; a translated track is never picked without `allow_translated` |
-| 3 | CLI, captions path (`test_cli.py`) | stdout holds only the transcript; `--source subs` with no matching track exits 1 |
-| 4 | CLI, local file to Whisper (`test_cli.py`) | Header shows the file name; a loop of 3 identical segments collapses to one, a run of 2 survives |
-| 5 | Cache (`test_cli.py`) | A second run with another `--interval` calls neither yt-dlp nor the transcriber |
+| 3 | CLI, captions path (`test_cli.py`, `test_upstream.py`) | stdout holds only the transcript; `--source subs` with no matching track exits 1. Opt-in: real yt-dlp on the sample still picks `en-orig`, gets one `.vtt` and renders 600+ lines (upstream breakage) |
+| 4 | CLI, local file to Whisper (`test_cli.py`) | Header shows the file name; a loop of 3 identical segments collapses to one, a run of 2 survives; `Stopped` prints the partial cues and the stop line, caches nothing and exits 130 |
+| 5 | Cache (`test_cli.py`) | A second run of a renamed local file with another `--interval` calls neither yt-dlp nor the transcriber |
 | 6 | Edges the fixture cannot show (`test_edges.py`) | Marker switches to `[HH:MM:SS]` past one hour; "Ja." repeated with other text between survives cleanup; one synthetic VTT covers an hour field, an identifier line and cue settings |
 
 Test seams, no mocking:
 
-- **yt-dlp:** tests set `TLDL_YTDLP` to `python tests/fake_ytdlp.py`. The fake prints the fixture JSON for `-J` and copies the fixture VTT into the `--paths` directory for the caption call, so the real argument building and subprocess code run.
+- **yt-dlp:** tests set `TLDL_YTDLP` to `python tests/fake_ytdlp.py`. The fake prints the fixture JSON for `-J` and copies the fixture VTT into the `--paths` directory for the caption call, so the real argument building and subprocess code run. Any other call (audio) exits 2, so an unexpected download fails loudly.
+- **Upstream:** `test_upstream.py` runs the real yt-dlp only when `TLDL_NETWORK=1`; run it after `uv tool upgrade yt-dlp`.
+- **Cache:** an autouse fixture in `tests/conftest.py` points `XDG_CACHE_HOME` at `tmp_path`.
 - **Whisper:** `cli.main(argv=None, transcribe=transcribe.run)`, which parses arguments and calls `cli.run(source, opts, transcribe) -> (cues, meta)` (no argparse or exit codes inside `run`); tests pass a function that returns fixed cues plus a language and probability.
 
 Fixture: the info JSON is trimmed to about 5 KB: `id`, `title`, `language`, `duration`, all 21 `-orig` keys, 3 translated keys (including `en` and `de-DE`), each with a format list of `[{"ext": "vtt"}, {"ext": "srt"}]`. The real counts are recorded in section 11 (U1).
@@ -323,7 +325,7 @@ verify flags with --help; log deviations in docs/DEVIATIONS.md; runtime dependen
 | `--cpu-threads`, `--loop-threshold` | The library default or threshold 3 measurably falls short |
 | Splitting into parts (`--max-chars`) | A full transcript does not paste or attach in Claude web |
 | Larger Whisper model | `small` disappoints on German |
-| Web UI (job queue, progress callback, cancel flag, URL allowlist) | Someone other than you needs to run it; `cli.run` is the entry point |
+| Web UI (job queue, progress callback, cancel flag, URL allowlist) | Someone other than you needs to run it; `cli.run` is the entry point, fed a `Namespace` from `parser.parse_args`; add a typed `Options` only then |
 | RSS/feed support, multiple URLs, cache eviction, `--copy` | A concrete need appears |
 
 ### TODOs
