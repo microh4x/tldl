@@ -62,13 +62,15 @@ def captions(cmd: list[str], info_path: Path, track: Track, tmpdir: Path) -> Pat
 
 
 def audio(cmd: list[str], url: str, tmpdir: Path) -> tuple[Path, dict]:
+    # A subdirectory, because the captions step of the auto fallback leaves files.
+    out = Path(tmpdir) / "audio"
     args = [
         "--no-playlist", "-f", "bestaudio/best", "--write-info-json",
-        "-o", "%(id)s.%(ext)s", "--paths", str(tmpdir), "--", url,
+        "-o", "%(id)s.%(ext)s", "--paths", str(out), "--", url,
     ]  # fmt: skip
     _run(cmd, args, capture=False)
-    infos = list(Path(tmpdir).glob("*.info.json"))
-    found = [f for f in Path(tmpdir).iterdir() if f not in infos]
+    infos = list(out.glob("*.info.json"))
+    found = [f for f in out.iterdir() if f not in infos]
     if len(found) != 1 or len(infos) != 1:
         raise Failed(f"expected one audio file, yt-dlp wrote {len(found)}")
     return found[0], json.loads(infos[0].read_text(encoding="utf-8"))
