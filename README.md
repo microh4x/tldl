@@ -18,6 +18,24 @@ It takes YouTube captions when they exist (fast, no audio download) and otherwis
 
 ffmpeg is not required.
 
+## Run without cloning
+
+With only uv installed, uvx fetches `tldl` and brings yt-dlp and deno into the same environment:
+
+```
+uvx --python 3.12 --with 'yt-dlp[default,curl-cffi]' --with deno \
+  --from git+https://github.com/microh4x/tldl tldl 'https://www.youtube.com/watch?v=...'
+```
+
+To get a plain `tldl` command instead, install it with the same options:
+
+```
+uv tool install --python 3.12 --with 'yt-dlp[default,curl-cffi]' --with deno \
+  git+https://github.com/microh4x/tldl
+```
+
+Use Python 3.11 or newer: uv ignores the onnxruntime constraint for Python 3.10 in `pyproject.toml` when it installs from git. uvx reuses its cached environment, so update yt-dlp with `uvx --refresh-package yt-dlp ...`, or with `uv tool upgrade tldl` after `uv tool install`. Neither reads `uv.lock`, so you get the newest dependencies. The Whisper model prerequisite above still applies.
+
 ## Install
 
 `uv tool install` does not read `uv.lock`, so pass the lock as constraints to get the tested versions:
