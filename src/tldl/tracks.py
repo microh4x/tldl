@@ -21,6 +21,16 @@ def _has_vtt(formats: list[dict]) -> bool:
     return any(f.get("ext") == "vtt" for f in formats)
 
 
+def summary(info: dict) -> str:
+    manual = [k for k in info.get("subtitles") or {} if k != "live_chat"]
+    auto = info.get("automatic_captions") or {}
+    orig = [k for k in auto if k.endswith("-orig")]
+    return (
+        f"manual: {', '.join(manual) or 'none'}; orig: {', '.join(orig) or 'none'}; "
+        f"{len(auto) - len(orig)} translated"
+    )
+
+
 def select_track(
     info: dict, lang: str, allow_translated: bool = False
 ) -> tuple[Track, list[Track]]:
@@ -46,13 +56,10 @@ def select_track(
     if allow_translated:
         candidates += pick(auto, translated, "auto-translated")
     if not candidates:
-        summary = (
-            f"no {lang} track; manual: {', '.join(manual) or 'none'}; "
-            f"orig: {', '.join(orig) or 'none'}; {len(translated)} translated"
-        )
+        msg = f"no {lang} track; {summary(info)}"
         if not allow_translated and pick(auto, translated, "auto-translated"):
-            summary += (
+            msg += (
                 f"; rerun with --allow-translated for a machine-translated {lang} track"
             )
-        raise NoTrack(summary)
+        raise NoTrack(msg)
     return candidates[0], candidates[1:]

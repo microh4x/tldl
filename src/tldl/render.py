@@ -1,4 +1,5 @@
 from tldl.vtt import Cue
+from tldl.ytdlp import youtube
 
 
 def _marker(t: int) -> str:
@@ -14,3 +15,9 @@ def render(cues: list[Cue], interval: int, header: str | None = None) -> str:
     parts = [header] if header else []
     parts += [f"{_marker(t)} {' '.join(lines)}" for t, lines in sorted(buckets.items())]
     return "\n\n".join(parts) + "\n"
+
+
+def header(meta: dict) -> str:
+    cap = meta["captions"]
+    site = "youtube " if youtube(meta["url"]) else ""
+    return f"# {meta['title']} | {site}captions ({cap['track']}, {cap['kind']}) | {meta['url']}"
