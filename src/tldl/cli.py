@@ -5,10 +5,11 @@ import os
 import shlex
 import sys
 import tempfile
+import time
 from importlib.metadata import version
 from pathlib import Path
 
-from tldl import clean, render, tracks, transcribe, vtt, ytdlp
+from tldl import cache, clean, render, tracks, transcribe, vtt, ytdlp
 from tldl.transcribe import NoModel, Stopped
 
 log = logging.getLogger(__name__)
@@ -44,6 +45,7 @@ def parser() -> argparse.ArgumentParser:
         default=os.environ.get("TLDL_YTDLP", "yt-dlp"),
         help="yt-dlp command, e.g. 'uvx yt-dlp@latest' (env TLDL_YTDLP)",
     )
+    p.add_argument("--refresh", action="store_true", help="ignore the cache")
     p.add_argument("--list-subs", action="store_true")
     p.add_argument("-v", "--verbose", action="store_true")
     p.add_argument("--version", action="version", version=f"tldl {version('tldl')}")
@@ -71,7 +73,7 @@ def _captions(url: str, opts: argparse.Namespace, tmp: Path) -> tuple[list, dict
             ),
         )
     log.info("caption track %s (%s)", track.key, track.kind)
-    path = ytdlp.captions(opts.ytdlp_cmd, info_path, track, tmp)
+    raw = ytdlp.captions(opts.ytdlp_cmd, info_path, track, tmp).read_bytes()
     auto = info.get("automatic_captions") or {}
     meta = {
         "url": url,
@@ -91,7 +93,7 @@ def _captions(url: str, opts: argparse.Namespace, tmp: Path) -> tuple[list, dict
             },
         },
     }
-    return vtt.parse(path.read_text(encoding="utf-8")), meta
+    return vtt.parse(raw.decode("utf-8")), meta, raw
 
 
 def _whisper(source: str, opts: argparse.Namespace, tmp: Path, transcribe) -> tuple:
@@ -115,13 +117,22 @@ def _whisper(source: str, opts: argparse.Namespace, tmp: Path, transcribe) -> tu
     return cues, meta
 
 
-def run(source: str, opts: argparse.Namespace, transcribe) -> tuple[list, dict]:
+def _keys(source: str, opts: argparse.Namespace) -> dict[str, str]:
+    url = cache.canonical_url(source) if _is_url(source) else cache.file_url(source)
+    # Fields irrelevant to the source used stay null.
+    unset = dict.fromkeys(["sub_lang", "allow_translated", "lang", "model"])
+    caps = {"sub_lang": opts.sub_lang, "allow_translated": opts.allow_translated}
+    whisper = {"lang": opts.lang, "model": opts.model}
+    return {
+        src: cache.key(**unset | used, canonical_url=url, source_used=src)
+        for src, used in [("captions", caps), ("whisper", whisper)]
+    }
+
+
+def _fetch(source: str, opts: argparse.Namespace, transcribe, captions: bool) -> tuple:
     with tempfile.TemporaryDirectory(prefix="tldl-") as tmp:
-        captions = _is_url(source) and (
-            opts.source == "subs" or (opts.source == "auto" and ytdlp.youtube(source))
-        )
         if not captions:
-            return _whisper(source, opts, Path(tmp), transcribe)
+            return (*_whisper(source, opts, Path(tmp), transcribe), None)
         try:
             return _captions(source, opts, Path(tmp))
         except tracks.NoTrack as e:
@@ -130,7 +141,28 @@ def run(source: str, opts: argparse.Namespace, transcribe) -> tuple[list, dict]:
             log.warning("%s; falling back to Whisper", e)
             cues, meta = _whisper(source, opts, Path(tmp), transcribe)
             meta["auto_fallback"] = {"from": "captions", "reason": str(e)}
+            return cues, meta, None
+
+
+def run(source: str, opts: argparse.Namespace, transcribe) -> tuple[list, dict]:
+    captions = _is_url(source) and (
+        opts.source == "subs" or (opts.source == "auto" and ytdlp.youtube(source))
+    )
+    keys = _keys(source, opts)
+    tries = ["captions"] if captions else []
+    tries += [] if opts.source == "subs" else ["whisper"]
+    for k in [] if opts.refresh else tries:
+        if hit := cache.load(keys[k]):
+            cues, meta = hit
+            if not _is_url(source):
+                # A moved or renamed file hits the same entry; show its new name.
+                meta |= {"url": Path(source).name, "title": Path(source).stem}
             return cues, meta
+    started = time.monotonic()
+    cues, meta, raw = _fetch(source, opts, transcribe, captions)
+    meta["timings_s"] = {"total": round(time.monotonic() - started, 1)}
+    cache.store(keys[meta["source"]], cues, meta, raw)
+    return cues, meta
 
 
 def _write(text: str) -> None:

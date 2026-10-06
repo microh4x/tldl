@@ -59,6 +59,26 @@ def test_ctrl_c_prints_partial_cues_without_header(tmp_path, capsys):
 
     out, _ = capsys.readouterr()
     assert out == "[00:00] A B\n\n[... stopped at 01:05]\n"
+    assert not (tmp_path / "cache").exists()
+
+
+def test_second_run_of_a_renamed_file_comes_from_the_cache(tmp_path, capsys):
+    audio = tmp_path / "talk.mp3"
+    audio.write_bytes(b"same audio")
+    calls = []
+
+    def transcribe(path, model, lang, allow_download):
+        calls.append(path)
+        return [Cue(0, 1, ["A"]), Cue(40, 41, ["B"])], "de", 0.99
+
+    assert cli.main([str(audio)], transcribe=transcribe) == 0
+    moved = audio.rename(tmp_path / "moved.mp3")
+    capsys.readouterr()
+    assert cli.main([str(moved), "--interval", "60"], transcribe=transcribe) == 0
+
+    out, _ = capsys.readouterr()
+    assert out == "# moved | whisper small (de, p=0.99) | moved.mp3\n\n[00:00] A B\n"
+    assert calls == [audio]
 
 
 def test_youtube_without_a_matching_track_falls_back_to_whisper(capsys):
