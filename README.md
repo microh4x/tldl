@@ -50,7 +50,7 @@ Run this in the project directory, and again after `git pull`. Without installin
 ## Usage
 
 ```
-tldl https://www.youtube.com/watch?v=6toXnSudT7o > video.txt
+tldl https://www.youtube.com/watch?v=PZRUtKYCpms > video.txt
 tldl https://cre.fm/cre094-conversational-design | wl-copy
 tldl episode.mp3 | xclip -selection clipboard
 ```

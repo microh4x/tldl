@@ -6,7 +6,7 @@ from tldl.transcribe import Stopped
 from tldl.vtt import Cue
 
 FIXTURES = Path(__file__).parent / "fixtures"
-URL = "https://www.youtube.com/watch?v=6toXnSudT7o"
+URL = "https://www.youtube.com/watch?v=oGjuESv8wRs"
 
 
 def _cues(*texts: str) -> list[Cue]:
@@ -17,11 +17,11 @@ def test_stdout_holds_only_the_transcript(capsys):
     assert cli.main([URL]) == 0
 
     out, err = capsys.readouterr()
-    title = json.loads((FIXTURES / "6toXnSudT7o.info.json").read_text())["title"]
-    cues = vtt.parse((FIXTURES / "6toXnSudT7o.en-orig.vtt").read_text())
-    header = f"# {title} | Mr Hewes | youtube captions (en-orig, auto) | {URL}"
+    title = json.loads((FIXTURES / "oGjuESv8wRs.info.json").read_text())["title"]
+    cues = vtt.parse((FIXTURES / "oGjuESv8wRs.de.vtt").read_text())
+    header = f"# {title} | Tim Pritlove | youtube captions (de, manual) | {URL}"
     assert out == render.render(clean.captions(cues), 30, header)
-    assert "en-orig" in err
+    assert "caption track de (manual)" in err
 
 
 def test_subs_without_a_matching_track_exits_1(capsys):
@@ -91,8 +91,8 @@ def test_youtube_without_a_matching_track_falls_back_to_whisper(capsys):
     assert cli.main([URL, "--sub-lang", "zz"], transcribe=transcribe) == 0
 
     out, err = capsys.readouterr()
-    title = json.loads((FIXTURES / "6toXnSudT7o.info.json").read_text())["title"]
-    head = f"# {title} | Mr Hewes | youtube whisper small (en, p=0.99) | {URL}"
+    title = json.loads((FIXTURES / "oGjuESv8wRs.info.json").read_text())["title"]
+    head = f"# {title} | Tim Pritlove | youtube whisper small (en, p=0.99) | {URL}"
     assert out == f"{head}\n\n[00:00] A\n"
-    assert calls == ["6toXnSudT7o.mp3"]
+    assert calls == ["oGjuESv8wRs.mp3"]
     assert "falling back to Whisper" in err

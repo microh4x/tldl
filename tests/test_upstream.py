@@ -16,14 +16,14 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_real_ytdlp_still_gets_the_original_track(monkeypatch):
+def test_real_ytdlp_still_gets_the_manual_track(monkeypatch):
     monkeypatch.setenv("TLDL_YTDLP", REAL_YTDLP)
-    opts = cli.parser().parse_args(["https://www.youtube.com/watch?v=6toXnSudT7o"])
+    opts = cli.parser().parse_args(["https://www.youtube.com/watch?v=oGjuESv8wRs"])
 
     cues, meta = cli.run(opts.input, opts, None)
 
-    assert meta["captions"]["track"] == "en-orig"
-    assert len(clean.captions(cues)) >= 600
+    assert meta["captions"]["track"] == "de"
+    assert len(clean.captions(cues)) >= 50
 
 
 def test_real_ytdlp_and_whisper_transcribe_a_served_file(monkeypatch, capsys):
