@@ -333,5 +333,5 @@ verify flags with --help; log deviations in docs/DEVIATIONS.md; runtime dependen
 
 - Fill the verification log during steps 1 to 5.
 - Compare captions against Whisper on a real German video and record which default habit is better.
-- Measure the token estimate with a real transcript.
+- Pick a reference YouTube video that matches the real use (talk or podcast, little background noise) to replace `6toXnSudT7o` in acceptance; the truck video is mostly workshop noise (risk 10.5).
 - Document the yt-dlp update routine in the README (`uv tool upgrade yt-dlp`).

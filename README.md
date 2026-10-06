@@ -47,7 +47,7 @@ Useful options (`tldl --help` lists all):
 - `--interval 60` makes longer blocks; `--no-header` drops the header line.
 - `--refresh` ignores the cache.
 
-Whisper runs at about 3.6x realtime on a 16-core laptop, so a 2-hour episode takes about 40 minutes. `tldl` logs an estimate and the progress. Ctrl-C prints the part done so far and exits 130; a partial result is not cached.
+Whisper runs at about 3.6x realtime on a 16-core laptop, so a 2-hour episode takes about 40 minutes. `tldl` logs an estimate and the progress. Peak memory grows with the length of the audio: about 1 GB for 10 minutes and 8.5 GB for 140 minutes. Ctrl-C prints the part done so far and exits 130; a partial result is not cached.
 
 ## Cache
 
