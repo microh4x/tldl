@@ -144,7 +144,7 @@ Accepted behaviour: a genuine immediate repeat of a line is indistinguishable fr
 
 ### 6.4 Rendering
 
-- Header (unless `--no-header`): `# {title} | {source_desc} | {url}` then a blank line. For a local file, `title` is the file name without extension and `url` is the file name. `source_desc` examples: `youtube captions (de-DE-orig, auto)`, `youtube captions (en, manual)`, `whisper small (de, p=0.99)`, `youtube captions (en, auto-translated)`.
+- Header (unless `--no-header`): `# {title} | {channel} | {source_desc} | {url}` then a blank line. `channel` is yt-dlp's `channel`, else `uploader`; the part is left out when neither is set (local files, cre.fm). For a local file, `title` is the file name without extension and `url` is the file name. `source_desc` examples: `youtube captions (de-DE-orig, auto)`, `youtube captions (en, manual)`, `whisper small (de, p=0.99)`, `youtube captions (en, auto-translated)`.
 - Bucket cleaned cues by `floor(start / interval) * interval`. For each non-empty bucket in ascending order: marker, a space, all cue lines joined with single spaces, then a blank line.
 - Marker: `[MM:SS]` when the bucket start is under one hour, else `[HH:MM:SS]` (the switch happens within a file, as in `clean_vtt.py`).
 - The output ends with a single trailing newline.
@@ -220,7 +220,7 @@ Test seams, no mocking:
 - **Cache:** an autouse fixture in `tests/conftest.py` points `XDG_CACHE_HOME` at `tmp_path`.
 - **Whisper:** `cli.main(argv=None, transcribe=transcribe.run)`, which parses arguments and calls `cli.run(source, opts, transcribe) -> (cues, meta)` (no argparse or exit codes inside `run`); tests pass a function that returns fixed cues plus a language and probability.
 
-Fixture: the info JSON is trimmed to about 5 KB: `id`, `title`, `language`, `duration`, all 21 `-orig` keys, 3 translated keys (including `en` and `de-DE`), each with a format list of `[{"ext": "vtt"}, {"ext": "srt"}]`. The real counts are recorded in section 11 (U1). `sample.mp3` is a 1.8 s English utterance ("Speech signal processing", dpsa on freesound.org, CC BY 3.0); `tests/fixtures/CREDITS.md` holds the attribution.
+Fixture: the info JSON is trimmed to about 5 KB: `id`, `title`, `channel`, `language`, `duration`, all 21 `-orig` keys, 3 translated keys (including `en` and `de-DE`), each with a format list of `[{"ext": "vtt"}, {"ext": "srt"}]`. The real counts are recorded in section 11 (U1). `sample.mp3` is a 1.8 s English utterance ("Speech signal processing", dpsa on freesound.org, CC BY 3.0); `tests/fixtures/CREDITS.md` holds the attribution.
 
 Not tested: model loading (verified by hand, U14, and in acceptance), `--list-subs` (a print loop), `live_chat` and tracks without `vtt` (absent from the real data).
 

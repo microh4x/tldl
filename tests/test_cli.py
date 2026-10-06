@@ -19,7 +19,7 @@ def test_stdout_holds_only_the_transcript(capsys):
     out, err = capsys.readouterr()
     title = json.loads((FIXTURES / "6toXnSudT7o.info.json").read_text())["title"]
     cues = vtt.parse((FIXTURES / "6toXnSudT7o.en-orig.vtt").read_text())
-    header = f"# {title} | youtube captions (en-orig, auto) | {URL}"
+    header = f"# {title} | Mr Hewes | youtube captions (en-orig, auto) | {URL}"
     assert out == render.render(clean.captions(cues), 30, header)
     assert "en-orig" in err
 
@@ -92,8 +92,7 @@ def test_youtube_without_a_matching_track_falls_back_to_whisper(capsys):
 
     out, err = capsys.readouterr()
     title = json.loads((FIXTURES / "6toXnSudT7o.info.json").read_text())["title"]
-    assert (
-        out == f"# {title} | youtube whisper small (en, p=0.99) | {URL}\n\n[00:00] A\n"
-    )
+    head = f"# {title} | Mr Hewes | youtube whisper small (en, p=0.99) | {URL}"
+    assert out == f"{head}\n\n[00:00] A\n"
     assert calls == ["6toXnSudT7o.mp3"]
     assert "falling back to Whisper" in err

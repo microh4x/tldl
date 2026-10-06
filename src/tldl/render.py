@@ -27,7 +27,9 @@ def header(meta: dict) -> str:
         desc = (
             f"whisper {w['model']} ({w['language']}, p={w['language_probability']:.2f})"
         )
-    return f"# {meta['title']} | {site}{desc} | {meta['url']}"
+    # Cache entries from before the channel field lack the key.
+    channel = f"{meta['channel']} | " if meta.get("channel") else ""
+    return f"# {meta['title']} | {channel}{site}{desc} | {meta['url']}"
 
 
 def stopped(at: float) -> str:

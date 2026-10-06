@@ -52,6 +52,11 @@ def parser() -> argparse.ArgumentParser:
     return p
 
 
+def _channel(info: dict) -> str | None:
+    # The generic extractor (cre.fm) sets neither.
+    return info.get("channel") or info.get("uploader")
+
+
 def _captions(url: str, opts: argparse.Namespace, tmp: Path) -> tuple[list, dict]:
     info = ytdlp.info(opts.ytdlp_cmd, url)
     info_path = tmp / "info.json"
@@ -79,6 +84,7 @@ def _captions(url: str, opts: argparse.Namespace, tmp: Path) -> tuple[list, dict
         "url": url,
         "id": info.get("id"),
         "title": info.get("title"),
+        "channel": _channel(info),
         "duration_s": info.get("duration"),
         "source": "captions",
         "auto_fallback": None,
@@ -100,10 +106,11 @@ def _whisper(source: str, opts: argparse.Namespace, tmp: Path, transcribe) -> tu
     if _is_url(source):
         path, info = ytdlp.audio(opts.ytdlp_cmd, source, tmp)
         meta = {"url": source, "id": info.get("id"), "title": info.get("title")}
-        meta["duration_s"] = info.get("duration")
+        meta |= {"channel": _channel(info), "duration_s": info.get("duration")}
     else:
         path = Path(source)
-        meta = {"url": path.name, "id": None, "title": path.stem, "duration_s": None}
+        meta = {"url": path.name, "id": None, "title": path.stem}
+        meta |= {"channel": None, "duration_s": None}
     cues, lang, prob = transcribe(path, opts.model, opts.lang, opts.allow_download)
     meta |= {
         "source": "whisper",
