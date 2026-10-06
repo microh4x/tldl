@@ -8,6 +8,8 @@ authors = [
 ]
 requires-python = ">=3.10"
 dependencies = [
+    # PyAV 19 dropped the metadata_errors argument that faster-whisper 1.2.1 passes.
+    "av<19",
     "faster-whisper>=1.2.1",
 ]
 
