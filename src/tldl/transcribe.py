@@ -8,8 +8,8 @@ from tldl.vtt import Cue
 
 log = logging.getLogger(__name__)
 
-# Realtime factor for small/int8 on the dev laptop; re-measure in acceptance (U10).
-SPEED = 3.5
+# Realtime factor for small/int8 on the 16-core dev laptop (U10); re-measure elsewhere.
+SPEED = 3.6
 PROGRESS_EVERY_S = 30
 
 

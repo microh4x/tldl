@@ -47,7 +47,7 @@ Confidence labels: **decided** (agreed or my default, override welcome), **verif
 
 ## 3. Environment
 
-- Linux; home `/home/ja`. CPU only. Core count unknown (Q5). The Claude Code sandbox differs: HOME is `/claude`, 16 cores, 27 GiB RAM, Python 3.10.12 (yt-dlp warns that 3.10 is deprecated), and no cached faster-whisper model.
+- Linux; home `/home/ja`. CPU only; 16 cores, 27 GiB RAM (Q5). The Claude Code sandbox runs on the same laptop with HOME `/claude`, Python 3.10.12 (yt-dlp warns that 3.10 is deprecated), and no cached faster-whisper model.
 - Existing model, verified from the owner's listing: `~/.cache/huggingface/hub/models--Systran--faster-whisper-small/snapshots/536b0662742c02347bc0e980a01041f333bce120/` containing `config.json`, `model.bin`, `tokenizer.json`, `vocabulary.txt`. This is the multilingual CTranslate2 `small`. The `.pt` files in `~/.cache/whisper/` (openai-whisper) and `ggml-small.bin` under `~/.local/share/com.bradenwong.whispering/` (whisper.cpp) use other formats and are not used.
 - External prerequisites (not managed by the project lock): `uv` and `yt-dlp`. Install yt-dlp as a uv tool with its own Python, a JavaScript runtime and the impersonation library: `uv tool install --python 3.12 --with deno 'yt-dlp[default,curl-cffi]'`; update with `uv tool upgrade yt-dlp`, which keeps these options. Reasons: yt-dlp has deprecated Python 3.10; YouTube needs a JS runtime (`deno` from PyPI, used through the `yt-dlp-ejs` package in `[default]`) or some formats go missing; `curl-cffi` lets yt-dlp impersonate a browser on sites that require it. Verified: `yt-dlp -v` reports `JS runtimes: deno-2.9.7` and `--list-impersonate-targets` lists curl_cffi targets. In the sandbox, `/usr/local/bin/yt-dlp` is broken, so use `TLDL_YTDLP="uvx --python 3.12 --with deno --from yt-dlp[default,curl-cffi]@latest yt-dlp"`. ffmpeg is not required if U6 holds; if it fails, add `-x` back and list ffmpeg here.
 - Model sharing rule: the tool must not write into `~/.cache/huggingface` unless `--allow-download` is given. The local-first load means an already cached model never triggers a Hub check, and a newer upstream revision is never pulled implicitly.
@@ -239,14 +239,15 @@ Not tested: model loading (verified by hand, U14, and in acceptance), `--list-su
 ## 10. Risks
 
 1. cre.fm works through yt-dlp's generic extractor (U9); other podcast sites can fail. A downloaded file is the fallback (local input).
-2. CPU runtime: about 3.5x realtime on one 1-minute clip, so roughly 40 minutes for a 2 h 20 min episode; not yet measured on a long run.
+2. CPU runtime and memory: 3.56x realtime on the 16-core dev laptop, so 39 minutes for a 2 h 20 min episode (U10). Peak memory grows with audio length: 1.0 GB for 10 minutes, 8.5 GB for 140 minutes, inside faster-whisper. A smaller machine (such as a VM) needs a memory check before long episodes; chunking the audio is the fix if it falls short.
 3. `small` is weaker on German and technical vocabulary than larger models (not measured on CRE audio).
-4. Whisper hallucinations on music or silence are reduced by VAD and the loop filter, not eliminated.
-5. Auto-caption quality: typically errors and weak punctuation; compare against Whisper on a real German video.
-6. Translation trap (5.2): a plain language code can be a machine translation; `-orig` semantics are verified on one video only (U3).
-7. YouTube can throttle or block requests (HTTP 429). The captions path makes one metadata request plus the subtitle fetch; no retry loops in v1.
-8. yt-dlp breaks when sites change; the fix is updating it, not the project.
-9. A wrong default pick (track, language) costs a rerun; the warning names the flag. If this happens often in practice, revisit prompts (section 14).
+4. Whisper hallucinations on music or silence are reduced by VAD and the loop filter, not eliminated. Seen in acceptance: invented text over the cre094 intro jingle, and a 6x loop in `026.mp3` that the filter collapsed.
+5. Whisper skips speech under loud background noise. On `6toXnSudT7o` (workshop and engine noise), segments ran up to 848 s with a dozen words each; Whisper kept 2,534 words against 3,816 in the captions. Nothing warns about it. Captions stay the default for YouTube; the German podcast `026.mp3` showed no such segment (longest 16 s).
+6. Auto-caption quality: typically errors and weak punctuation; compare against Whisper on a real German video.
+7. Translation trap (5.2): a plain language code can be a machine translation; `-orig` semantics are verified on one video only (U3).
+8. YouTube can throttle or block requests (HTTP 429). The captions path makes one metadata request plus the subtitle fetch; no retry loops in v1.
+9. yt-dlp breaks when sites change; the fix is updating it, not the project.
+10. A wrong default pick (track, language) costs a rerun; the warning names the flag. If this happens often in practice, revisit prompts (section 14).
 
 ## 11. Verification log (fill in while implementing)
 
@@ -260,12 +261,12 @@ Not tested: model loading (verified by hand, U14, and in acceptance), `--list-su
 | U3 | Which `-orig` track is the spoken language on the sample; whether it is auto-dubbed | verified: English (`en-orig`); 20 audio tracks are noted `dubbed-auto`, the en-US track is `original (default)` with `language_preference` 10, and yt-dlp's default selection picks it | compare `language`, title, audio |
 | U4 | Auto-caption VTT structure | verified: see 6.3; short new lines carry no word-timing tags | inspect the fixture |
 | U5 | `local_files_only` parameter name in the resolved faster-whisper | verified (1.2.1): `local_files_only`, `download_root`, `cpu_threads` exist | `help(WhisperModel)` |
-| U6 | faster-whisper decodes yt-dlp `bestaudio` (webm/opus, m4a) without a system ffmpeg | unverified | run on a downloaded file with ffmpeg off PATH |
+| U6 | faster-whisper decodes yt-dlp `bestaudio` (webm/opus, m4a) without a system ffmpeg | verified 2026-10-06 for webm/opus: `--source whisper` on `6toXnSudT7o` (format 251) ran end to end with `ffmpeg` and `ffprobe` hidden from PATH; m4a not tried | run on a downloaded file with ffmpeg off PATH |
 | U7 | Python range supported by faster-whisper's dependencies | unverified | `uv lock` |
-| U8 | `uv tool install .` ignores `uv.lock` | unverified | `uv tool install --help`, small experiment |
+| U8 | `uv tool install .` ignores `uv.lock` | verified (uv 0.6.3): no `--locked` or `--frozen` flag; a plain install resolved fresh on Python 3.12. `uv export --frozen --no-dev --no-emit-project --no-hashes -o c.txt` plus `uv tool install --python 3.10 -c c.txt .` reproduces the project venv exactly | `uv tool install --help`, install into a scratch `UV_TOOL_DIR`, compare versions |
 | U9 | yt-dlp handles the cre.fm URL | verified: generic extractor finds 4 formats (oga, m4a, mp3, opus); `duration` is null, so the long-job log reads duration from the downloaded file | run it |
-| U10 | CPU throughput of `small` int8 on this machine | partly: 1-min German clip ran at 3.5x realtime in the 16-core sandbox (load 2 s); the 10-min run is still open | time a 10-minute clip |
-| U12 | Token estimates in section 1 | unverified | count a real transcript |
+| U10 | CPU throughput of `small` int8 on this machine | verified 2026-10-06 on the 16-core dev laptop: 10-min German clip in 166 s (3.6x realtime, maxrss 1.0 GB); full `026.mp3` (139.7 min) in 39.3 min against an estimate of 38.8 (3.56x), maxrss 8.5 GB. `SPEED` is 3.6; another machine (such as a VM) must measure it again, because it only feeds the estimate log | time a 10-minute clip, then the full file |
+| U12 | Token estimates in section 1 | checked by character count (no tokenizer offline): `026.mp3` output is 148k characters, 25k German words, 280 markers in 3,000 characters (about 1.5k tokens); the text itself is roughly 40k to 50k tokens. The 2,286 raw segments as VTT would add about 45k tokens of timing lines | count a real transcript |
 | U13 | `transcribe()` finishes language detection before any segment is consumed | verified: `info.language=de`, p=1.00, 3.2 s before iterating | read `info.language` before iterating |
 | U14 | `local_files_only=True` loads the cached snapshot with no network; which exception a missing model raises | verified: cached `small` loads; missing `tiny` raises `huggingface_hub.errors.LocalEntryNotFoundError` | run with the cache present, then with `--model tiny` not cached |
 | U15 | `info["language"]` exists and is reliable | verified on one video: `en-US`, matches the original audio | inspect the trimmed info JSON |
@@ -310,7 +311,7 @@ verify flags with --help; log deviations in docs/DEVIATIONS.md; runtime dependen
 2. **Q2, yt-dlp:** OK with the external `yt-dlp` on PATH plus `--ytdlp-cmd`/`TLDL_YTDLP`? Is yt-dlp installed today, and how?
 3. **Q3, `--sub-lang auto`:** confirm the video's language as default, else `en`.
 4. **Q4, sample set and permissions:** besides cre094 and `6toXnSudT7o`, which one or two URLs for acceptance (ideally one German YouTube video with captions and one episode of 2 h or longer)? May Claude Code use the network (YouTube, cre.fm, PyPI, Hugging Face) and run a multi-hour transcription during acceptance?
-5. **Q5, machine:** CPU cores and RAM.
+5. **Q5, machine:** answered: the sandbox is the dev laptop (16 cores, 27 GiB RAM). It may later run on a VM behind a web frontend; measure U10 and peak memory again there.
 6. **Q6, global command:** after U8, `uv tool install .` or `uv run` inside the project?
 
 ### Deferred, with the trigger for adding each
