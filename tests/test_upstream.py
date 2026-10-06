@@ -34,11 +34,11 @@ def test_real_ytdlp_and_whisper_transcribe_a_served_file(monkeypatch, capsys):
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
-        url = f"http://127.0.0.1:{server.server_port}/sample.mp3"
+        url = f"http://127.0.0.1:{server.server_port}/hello.mp3"
         assert cli.main([url]) == 0
     finally:
         server.shutdown()
 
     out = capsys.readouterr().out
-    assert out.startswith("# sample | whisper small (en, ")
-    assert "signal processing" in out.casefold()
+    assert out.startswith("# hello | whisper small (en, ")
+    assert "hello" in out.split("\n", 1)[1].casefold()

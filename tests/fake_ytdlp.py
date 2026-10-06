@@ -17,7 +17,7 @@ elif "--load-info-json" in args:
 elif "bestaudio/best" in args:
     out = Path(args[args.index("--paths") + 1])
     out.mkdir(parents=True, exist_ok=True)
-    shutil.copy(FIXTURES / "sample.mp3", out / "6toXnSudT7o.mp3")
+    shutil.copy(FIXTURES / "hello.mp3", out / "6toXnSudT7o.mp3")
     shutil.copy(FIXTURES / "6toXnSudT7o.info.json", out)
 else:
     sys.exit(2)
