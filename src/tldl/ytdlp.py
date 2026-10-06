@@ -2,6 +2,7 @@ import json
 import logging
 import re
 import subprocess
+import sys
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -20,13 +21,17 @@ def youtube(url: str) -> bool:
     return (urlsplit(url).hostname or "") in YOUTUBE_HOSTS
 
 
-def _run(cmd: list[str], args: list[str]) -> str:
+def _run(cmd: list[str], args: list[str], capture: bool = True) -> str:
     log.debug("running %s", [*cmd, *args])
+    # Uncaptured, yt-dlp's progress output goes to our stderr.
+    out = {"capture_output": True} if capture else {"stdout": sys.stderr}
     try:
-        p = subprocess.run([*cmd, *args], capture_output=True, text=True, check=False)
+        p = subprocess.run([*cmd, *args], text=True, check=False, **out)
     except FileNotFoundError:
         raise Failed(f"{cmd[0]} not found; set --ytdlp-cmd or TLDL_YTDLP") from None
     if p.returncode:
+        if not capture:
+            raise Failed(f"yt-dlp exited {p.returncode}; see its output above")
         last = (p.stderr.strip().splitlines() or ["no output"])[-1]
         raise Failed(f"yt-dlp exited {p.returncode}: {last}")
     return p.stdout
@@ -54,3 +59,16 @@ def captions(cmd: list[str], info_path: Path, track: Track, tmpdir: Path) -> Pat
     if len(found) != 1:
         raise Failed(f"expected one .vtt for {track.key}, yt-dlp wrote {len(found)}")
     return found[0]
+
+
+def audio(cmd: list[str], url: str, tmpdir: Path) -> tuple[Path, dict]:
+    args = [
+        "--no-playlist", "-f", "bestaudio/best", "--write-info-json",
+        "-o", "%(id)s.%(ext)s", "--paths", str(tmpdir), "--", url,
+    ]  # fmt: skip
+    _run(cmd, args, capture=False)
+    infos = list(Path(tmpdir).glob("*.info.json"))
+    found = [f for f in Path(tmpdir).iterdir() if f not in infos]
+    if len(found) != 1 or len(infos) != 1:
+        raise Failed(f"expected one audio file, yt-dlp wrote {len(found)}")
+    return found[0], json.loads(infos[0].read_text(encoding="utf-8"))

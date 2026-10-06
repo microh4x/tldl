@@ -1,4 +1,5 @@
 import logging
+from itertools import groupby
 
 from tldl.vtt import Cue
 
@@ -20,4 +21,19 @@ def captions(cues: list[Cue]) -> list[Cue]:
         len(out),
         len(cues),
     )
+    return out
+
+
+def whisper(cues: list[Cue]) -> list[Cue]:
+    """Collapse runs of 3 or more identical segments, Whisper's loop failure."""
+    out: list[Cue] = []
+    for _, group in groupby(
+        cues, lambda c: " ".join(" ".join(c.lines).casefold().split())
+    ):
+        run = list(group)
+        if len(run) >= 3:
+            log.info("cleanup: collapsed %d repeats at %.0fs", len(run), run[0].start)
+            run = run[:1]
+        out += run
+    log.info("cleanup: %d of %d segments left", len(out), len(cues))
     return out

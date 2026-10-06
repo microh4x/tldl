@@ -18,6 +18,17 @@ def render(cues: list[Cue], interval: int, header: str | None = None) -> str:
 
 
 def header(meta: dict) -> str:
-    cap = meta["captions"]
     site = "youtube " if youtube(meta["url"]) else ""
-    return f"# {meta['title']} | {site}captions ({cap['track']}, {cap['kind']}) | {meta['url']}"
+    if meta["source"] == "captions":
+        cap = meta["captions"]
+        desc = f"captions ({cap['track']}, {cap['kind']})"
+    else:
+        w = meta["whisper"]
+        desc = (
+            f"whisper {w['model']} ({w['language']}, p={w['language_probability']:.2f})"
+        )
+    return f"# {meta['title']} | {site}{desc} | {meta['url']}"
+
+
+def stopped(at: float) -> str:
+    return f"[... stopped at {_marker(int(at))[1:-1]}]\n"
