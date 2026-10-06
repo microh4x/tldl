@@ -2,7 +2,6 @@ import json
 import logging
 import re
 import subprocess
-import sys
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -23,8 +22,8 @@ def youtube(url: str) -> bool:
 
 def _run(cmd: list[str], args: list[str], capture: bool = True) -> str:
     log.debug("running %s", [*cmd, *args])
-    # Uncaptured, yt-dlp's progress output goes to our stderr.
-    out = {"capture_output": True} if capture else {"stdout": sys.stderr}
+    # Uncaptured, yt-dlp's progress goes to fd 2; sys.stderr may lack a fileno.
+    out = {"capture_output": True} if capture else {"stdout": 2}
     try:
         p = subprocess.run([*cmd, *args], text=True, check=False, **out)
     except FileNotFoundError:
