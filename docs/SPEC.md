@@ -114,7 +114,7 @@ Why our code selects the track: the owner's real `--list-subs` output (video `6t
 
 ### 5.3 Whisper flow
 
-- **Audio:** a local file is used as is. A URL goes through `<ytdlp> --no-playlist -f bestaudio/best --write-info-json -o '%(id)s.%(ext)s' --paths <tmpdir> -- URL`. No `-x`: faster-whisper decodes through PyAV, which bundles its own ffmpeg libraries (U6). On auto-dubbed YouTube videos the default selection picks the original-language audio (U3). This call does not capture output: yt-dlp's stdout (where it prints progress) goes to our stderr, so a long download shows progress and keeps stdout clean; on failure the error says to see yt-dlp's output above. The audio file is the one file in the temp dir that is not `.info.json`. The metadata and caption calls keep capturing output. No offline test covers this call or the `auto` fallback; acceptance runs both.
+- **Audio:** a local file is used as is. A URL goes through `<ytdlp> --no-playlist -f bestaudio/best --write-info-json -o '%(id)s.%(ext)s' --paths <tmpdir> -- URL`. No `-x`: faster-whisper decodes through PyAV, which bundles its own ffmpeg libraries (U6). On auto-dubbed YouTube videos the default selection picks the original-language audio (U3). This call does not capture output: yt-dlp's stdout (where it prints progress) goes to our stderr, so a long download shows progress and keeps stdout clean; on failure the error says to see yt-dlp's output above. The audio file is the one file in the temp dir that is not `.info.json`. The audio goes into its own subdirectory, because the `auto` fallback runs it after the captions step has written to the temp dir. The metadata and caption calls keep capturing output. An offline test covers the `auto` fallback through the fake yt-dlp; an opt-in test runs the real yt-dlp against a local HTTP server.
 - **Model (local-first):** `WhisperModel(model, device="cpu", compute_type="int8", local_files_only=True)`. If the model is not cached, exit 1 with the repo name and "rerun with `--allow-download`". With `--allow-download`, retry with `local_files_only=False`. The missing-model exception (`LocalEntryNotFoundError`, U14) subclasses `FileNotFoundError`, so catch that and raise `NoModel`, without importing `huggingface_hub`.
 - **Before transcribing:** log the audio duration (`info.duration`) and an estimated run time from a constant speed factor (3.5x realtime from the 1-minute measurement; re-measure in acceptance, U10). Ctrl-C is the way out of a job that is too long (see section 4 for partial output).
 - **Transcribe:** `language=lang` (None means auto-detect), `task="transcribe"`, `beam_size=5`, `vad_filter=True`, `condition_on_previous_text=False`. `transcribe()` detects the language before it returns (U13): log `info.language` and `info.language_probability` immediately; if the probability is below 0.8 and `--lang` is not given, add a warning that names `--lang`. `segments` is a lazy generator: iterate to completion and log progress (position against `info.duration`) to stderr every 30 s of wall time.
@@ -202,25 +202,25 @@ Only these names are fixed in advance; helpers come out of TDD. Each type lives 
 
 ## 8. Testing
 
-Offline by default; the one network test is opt-in. Vertical slices, most useful first; each test must fail on a real bug, so no test exists only to raise coverage. About 13 tests in all: 12 offline plus one opt-in network test.
+Offline by default; the one network test is opt-in. Vertical slices, most useful first; each test must fail on a real bug, so no test exists only to raise coverage. About 15 tests in all: 13 offline plus two opt-in tests.
 
 | # | Slice | Tests |
 |---|---|---|
 | 1 | Fixture VTT -> parse -> clean -> render (`test_pipeline.py`) | Output holds each of the 661 lines once, in order, in `[MM:SS]` blocks, with `>>` decoded and one trailing newline |
 | 2 | Track choice (`test_tracks.py`) | `auto` picks `en-orig`; `de` picks `de-DE-orig`; a translated track is never picked without `allow_translated` |
-| 3 | CLI, captions path (`test_cli.py`, `test_upstream.py`) | stdout holds only the transcript; `--source subs` with no matching track exits 1. Opt-in: real yt-dlp on the sample still picks `en-orig`, gets one `.vtt` and renders 600+ lines (upstream breakage) |
-| 4 | CLI, local file to Whisper (`test_cli.py`) | Two tests. One checks exact stdout for segments `A, A, B, B, B, C`: the header shows the file name and language, the loop of 3 collapses to one, the run of 2 survives. One checks that `Stopped` prints the partial cues and the stop line with no header and exits 130; slice 5 adds "caches nothing" |
+| 3 | CLI, captions path (`test_cli.py`, `test_upstream.py`) | stdout holds only the transcript; `--source subs` with no matching track exits 1. Opt-in: real yt-dlp on the sample still picks `en-orig`, gets one `.vtt` and renders 600+ lines (upstream breakage); real yt-dlp downloads `sample.mp3` from a local `http.server` and real Whisper hears "signal processing" |
+| 4 | CLI, local file to Whisper (`test_cli.py`) | Two tests. One checks exact stdout for segments `A, A, B, B, B, C`: the header shows the file name and language, the loop of 3 collapses to one, the run of 2 survives. One checks that `Stopped` prints the partial cues and the stop line with no header and exits 130; slice 5 adds "caches nothing". A third (added after a bug found by hand) runs a YouTube URL with `--sub-lang zz` through the `auto` fallback and checks the whisper header |
 | 5 | Cache (`test_cli.py`) | A second run of a renamed local file with another `--interval` calls neither yt-dlp nor the transcriber |
 | 6 | Edges the fixture cannot show (`test_edges.py`) | Marker switches to `[HH:MM:SS]` past one hour; "Ja." repeated with other text between survives cleanup; one synthetic VTT covers an hour field, an identifier line and cue settings |
 
 Test seams, no mocking:
 
-- **yt-dlp:** tests set `TLDL_YTDLP` to `python tests/fake_ytdlp.py`. The fake prints the fixture JSON for `-J` and copies the fixture VTT into the `--paths` directory for the caption call, so the real argument building and subprocess code run. Any other call (audio) exits 2, so an unexpected download fails loudly.
-- **Upstream:** `test_upstream.py` runs the real yt-dlp only when `TLDL_NETWORK=1`; run it after `uv tool upgrade yt-dlp`.
+- **yt-dlp:** tests set `TLDL_YTDLP` to `python tests/fake_ytdlp.py`. The fake prints the fixture JSON for `-J` and copies the fixture VTT into the `--paths` directory for the caption call, so the real argument building and subprocess code run. For the audio call it copies `sample.mp3` and the info JSON into the `--paths` directory. Any other call exits 2.
+- **Upstream:** `test_upstream.py` runs the real yt-dlp (the `TLDL_YTDLP` set before pytest starts, else `yt-dlp`) only when `TLDL_NETWORK=1`; run it after `uv tool upgrade yt-dlp`. The served-file test also needs the cached model (`HF_HUB_CACHE`).
 - **Cache:** an autouse fixture in `tests/conftest.py` points `XDG_CACHE_HOME` at `tmp_path`.
 - **Whisper:** `cli.main(argv=None, transcribe=transcribe.run)`, which parses arguments and calls `cli.run(source, opts, transcribe) -> (cues, meta)` (no argparse or exit codes inside `run`); tests pass a function that returns fixed cues plus a language and probability.
 
-Fixture: the info JSON is trimmed to about 5 KB: `id`, `title`, `language`, `duration`, all 21 `-orig` keys, 3 translated keys (including `en` and `de-DE`), each with a format list of `[{"ext": "vtt"}, {"ext": "srt"}]`. The real counts are recorded in section 11 (U1).
+Fixture: the info JSON is trimmed to about 5 KB: `id`, `title`, `language`, `duration`, all 21 `-orig` keys, 3 translated keys (including `en` and `de-DE`), each with a format list of `[{"ext": "vtt"}, {"ext": "srt"}]`. The real counts are recorded in section 11 (U1). `sample.mp3` is a 1.8 s English utterance ("Speech signal processing", dpsa on freesound.org, CC BY 3.0); `tests/fixtures/CREDITS.md` holds the attribution.
 
 Not tested: model loading (verified by hand, U14, and in acceptance), `--list-subs` (a print loop), `live_chat` and tracks without `vtt` (absent from the real data).
 

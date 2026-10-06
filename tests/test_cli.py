@@ -59,3 +59,21 @@ def test_ctrl_c_prints_partial_cues_without_header(tmp_path, capsys):
 
     out, _ = capsys.readouterr()
     assert out == "[00:00] A B\n\n[... stopped at 01:05]\n"
+
+
+def test_youtube_without_a_matching_track_falls_back_to_whisper(capsys):
+    calls = []
+
+    def transcribe(path, model, lang, allow_download):
+        calls.append(path.name)
+        return _cues("A"), "en", 0.99
+
+    assert cli.main([URL, "--sub-lang", "zz"], transcribe=transcribe) == 0
+
+    out, err = capsys.readouterr()
+    title = json.loads((FIXTURES / "6toXnSudT7o.info.json").read_text())["title"]
+    assert (
+        out == f"# {title} | youtube whisper small (en, p=0.99) | {URL}\n\n[00:00] A\n"
+    )
+    assert calls == ["6toXnSudT7o.mp3"]
+    assert "falling back to Whisper" in err
