@@ -42,6 +42,8 @@ def _load(model: str, allow_download: bool) -> WhisperModel:
 def run(
     path: Path, model: str, lang: str | None, allow_download: bool
 ) -> tuple[list[Cue], str, float]:
+    # Decoding and language detection run before the estimate below can be logged.
+    log.info("transcribing %s with whisper %s; decoding audio", path.name, model)
     segments, info = _load(model, allow_download).transcribe(
         str(path),
         language=lang,
