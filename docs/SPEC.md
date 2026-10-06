@@ -242,8 +242,8 @@ Not tested: model loading (verified by hand, U14, and in acceptance), `--list-su
 2. CPU runtime and memory: 3.56x realtime on the 16-core dev laptop, so 39 minutes for a 2 h 20 min episode (U10). Peak memory grows with audio length: 1.0 GB for 10 minutes, 8.5 GB for 140 minutes, inside faster-whisper. A smaller machine (such as a VM) needs a memory check before long episodes; chunking the audio is the fix if it falls short.
 3. `small` is weaker on German and technical vocabulary than larger models (not measured on CRE audio).
 4. Whisper hallucinations on music or silence are reduced by VAD and the loop filter, not eliminated. Seen in acceptance: invented text over the cre094 intro jingle, and a 6x loop in `026.mp3` that the filter collapsed.
-5. Whisper skips speech under loud background noise. On `6toXnSudT7o` (workshop and engine noise), segments ran up to 848 s with a dozen words each; Whisper kept 2,534 words against 3,816 in the captions. Nothing warns about it. Captions stay the default for YouTube; the German podcast `026.mp3` showed no such segment (longest 16 s).
-6. Auto-caption quality: typically errors and weak punctuation; compare against Whisper on a real German video.
+5. Whisper skips speech under loud background noise. On `6toXnSudT7o` (workshop and engine noise), segments ran up to 848 s with a dozen words each; Whisper kept 2,534 words against 3,816 in the captions. Nothing warns about it. The `small` model is likely part of the cause (risk 10.3). Captions stay the default for YouTube; the German podcast `026.mp3` showed no such segment (longest 16 s).
+6. Auto-caption quality: checked on one German conversation (`1LFdiGkqPZQ`, 128 min, `de-orig`): captions 20.6k words in seconds, Whisper 19.4k words in 30 min, same content. Captions keep more fillers and repeats; Whisper punctuates a little better. Captions first stays the default.
 7. Translation trap (5.2): a plain language code can be a machine translation; `-orig` semantics are verified on one video only (U3).
 8. YouTube can throttle or block requests (HTTP 429). The captions path makes one metadata request plus the subtitle fetch; no retry loops in v1.
 9. yt-dlp breaks when sites change; the fix is updating it, not the project.
@@ -310,7 +310,7 @@ verify flags with --help; log deviations in docs/DEVIATIONS.md; runtime dependen
 1. **Q1, name:** answered: `tldl`.
 2. **Q2, yt-dlp:** OK with the external `yt-dlp` on PATH plus `--ytdlp-cmd`/`TLDL_YTDLP`? Is yt-dlp installed today, and how?
 3. **Q3, `--sub-lang auto`:** confirm the video's language as default, else `en`.
-4. **Q4, sample set and permissions:** besides cre094 and `6toXnSudT7o`, which one or two URLs for acceptance (ideally one German YouTube video with captions and one episode of 2 h or longer)? May Claude Code use the network (YouTube, cre.fm, PyPI, Hugging Face) and run a multi-hour transcription during acceptance?
+4. **Q4, sample set and permissions:** besides cre094 and `6toXnSudT7o`, which one or two URLs for acceptance (ideally one German YouTube video with captions and one episode of 2 h or longer)? May Claude Code use the network (YouTube, cre.fm, PyPI, Hugging Face) and run a multi-hour transcription during acceptance? Answered 2026-10-06: `026.mp3` for the long episode; German YouTube `1LFdiGkqPZQ` (used) and `QfgDbeNM1tc`, both about 2 h with `de-orig` captions only; network and long runs allowed on mains power.
 5. **Q5, machine:** answered: the sandbox is the dev laptop (16 cores, 27 GiB RAM). It may later run on a VM behind a web frontend; measure U10 and peak memory again there.
 6. **Q6, global command:** after U8, `uv tool install .` or `uv run` inside the project?
 
@@ -332,6 +332,5 @@ verify flags with --help; log deviations in docs/DEVIATIONS.md; runtime dependen
 ### TODOs
 
 - Fill the verification log during steps 1 to 5.
-- Compare captions against Whisper on a real German video and record which default habit is better.
-- Pick a reference YouTube video that matches the real use (talk or podcast, little background noise) to replace `6toXnSudT7o` in acceptance; the truck video is mostly workshop noise (risk 10.5).
+- Pick a reference YouTube video that matches the real use (talk or podcast, little background noise) to replace `6toXnSudT7o` in acceptance; the truck video is mostly workshop noise (risk 10.5). Candidates: `1LFdiGkqPZQ`, `QfgDbeNM1tc` (Q4).
 - Document the yt-dlp update routine in the README (`uv tool upgrade yt-dlp`).
