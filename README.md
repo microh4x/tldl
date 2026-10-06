@@ -37,6 +37,13 @@ tldl https://cre.fm/cre094-conversational-design | wl-copy
 tldl episode.mp3 | xclip -selection clipboard
 ```
 
+To summarise with Claude Code, pipe the transcript into `claude -p`. Haiku is enough for a gist; use `--model sonnet` when the summary feels thin.
+
+```
+tldl https://www.youtube.com/watch?v=1LFdiGkqPZQ \
+  | claude -p --model haiku "Summarise this transcript. Key points as bullets, with [MM:SS] references."
+```
+
 The transcript goes to stdout; logs, the chosen caption track and the cache path go to stderr. `tldl` never reads stdin.
 
 Useful options (`tldl --help` lists all):
